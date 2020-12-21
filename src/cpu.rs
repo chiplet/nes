@@ -206,6 +206,7 @@ impl CPU {
                     }
                     _ => panic!("Illegal addressing mode for LDA!")
                 }
+                self.pc += data.size();
             }
 
             _ => panic!("Emulation for the instruction not yet implemented!\n  {:?}", instruction)
