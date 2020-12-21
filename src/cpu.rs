@@ -1,5 +1,5 @@
 mod isa;
-use crate::cpu::isa::{Instruction, AddrMode};
+use crate::cpu::isa::{Instruction, AddrMode, InstructionType};
 use std::fmt;
 
 // 7  bit  0
@@ -96,7 +96,7 @@ impl CPU {
         let instruction_bytes = &self.ram[next_index..next_index+3];
 
         // Decode
-        let instruction = Instruction::decode(instruction_bytes)?;
+        let instruction = Instruction::from(instruction_bytes)?;
 
         // print current instruction and CPU state before execution
         println!("${:04x}: {:?} {}", self.pc, instruction, self);
@@ -108,25 +108,25 @@ impl CPU {
 
     // execute a machine instruction
     fn execute(&mut self, instruction: &Instruction) {
-        match instruction {
+        match instruction.ins_type {
 
             // Load Accumulator with Memory
-            Instruction::LDA(data) => {
-                match data.addr_mode {
+            InstructionType::LDA => {
+                match &instruction.addr_mode {
                     AddrMode::Imm(value) => {
-                        self.acc = value;
+                        self.acc = *value;
                     }
                     AddrMode::Zpg(addr) => {
-                        self.acc = self.ram[addr as usize];
+                        self.acc = self.ram[*addr as usize];
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.acc = self.ram[(addr + self.x) as usize];
+                        self.acc = self.ram[(*addr + self.x) as usize];
                     }
                     AddrMode::Abs(addr) => {
-                        self.acc = self.ram[addr as usize]
+                        self.acc = self.ram[*addr as usize]
                     }
                     AddrMode::AbsX(addr) => {
-                        self.acc = self.ram[(addr + self.x as u16) as usize];
+                        self.acc = self.ram[(*addr + self.x as u16) as usize];
                     }
                     AddrMode::AbsY(addr) => {
                         self.acc = self.ram[(addr + self.y as u16) as usize];
@@ -136,82 +136,78 @@ impl CPU {
                         self.acc = self.ram[indirect];
                     }
                     AddrMode::IndY(addr) => {
-                        let indirect = self.ram[addr as usize] as usize;
+                        let indirect = self.ram[*addr as usize] as usize;
                         self.acc = self.ram[indirect + self.y as usize];
                     }
                     _ => panic!("Illegal addressing mode for LDA!")
                 }
-
-                self.pc += data.size();
             }
 
             // Add Memory to Accumulator with Carry
-            Instruction::ADC(data) => {
-                match data.addr_mode {
+            InstructionType::ADC => {
+                match &instruction.addr_mode {
                     AddrMode::Imm(value) => {
                         self.acc += value;
                     }
                     AddrMode::Zpg(addr) => {
-                        self.acc += self.ram[addr as usize];
+                        self.acc += self.ram[*addr as usize];
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.acc += self.ram[(addr + self.x) as usize];
+                        self.acc += self.ram[(*addr + self.x) as usize];
                     }
                     AddrMode::Abs(addr) => {
-                        self.acc += self.ram[addr as usize]
+                        self.acc += self.ram[*addr as usize]
                     }
                     AddrMode::AbsX(addr) => {
-                        self.acc += self.ram[(addr + self.x as u16) as usize];
+                        self.acc += self.ram[(*addr + self.x as u16) as usize];
                     }
                     AddrMode::AbsY(addr) => {
-                        self.acc += self.ram[(addr + self.y as u16) as usize];
+                        self.acc += self.ram[(*addr + self.y as u16) as usize];
                     }
                     AddrMode::XInd(addr) => {
-                        let indirect = self.ram[(addr + self.x) as usize] as usize;
+                        let indirect = self.ram[(*addr + self.x) as usize] as usize;
                         self.acc += self.ram[indirect];
                     }
                     AddrMode::IndY(addr) => {
-                        let indirect = self.ram[addr as usize] as usize;
+                        let indirect = self.ram[*addr as usize] as usize;
                         self.acc += self.ram[indirect + self.y as usize];
                     }
                     _ => panic!("Illegal addressing mode for ADC!")
                 }
-                self.pc += data.size();
             }
 
-            Instruction::STA(data) => {
-                match data.addr_mode {
+            InstructionType::STA => {
+                match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
-                        self.ram[addr as usize] = self.acc;
+                        self.ram[*addr as usize] = self.acc;
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.ram[(addr + self.x) as usize] = self.acc;
+                        self.ram[(*addr + self.x) as usize] = self.acc;
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[addr as usize] = self.acc;
+                        self.ram[*addr as usize] = self.acc;
                     }
                     AddrMode::AbsX(addr) => {
-                        self.ram[(addr + self.x as u16) as usize] = self.acc;
+                        self.ram[(*addr + self.x as u16) as usize] = self.acc;
                     }
                     AddrMode::AbsY(addr) => {
-                        self.ram[(addr + self.y as u16) as usize] = self.acc;
+                        self.ram[(*addr + self.y as u16) as usize] = self.acc;
                     }
                     AddrMode::XInd(addr) => {
-                        let indirect = self.ram[(addr + self.x) as usize] as usize;
+                        let indirect = self.ram[(*addr + self.x) as usize] as usize;
                         self.ram[indirect] = self.acc;
                     }
                     AddrMode::IndY(addr) => {
-                        let indirect = self.ram[addr as usize] as usize;
+                        let indirect = self.ram[*addr as usize] as usize;
                         self.ram[indirect + self.y as usize] = self.acc;
                     }
                     _ => panic!("Illegal addressing mode for LDA!")
                 }
-                self.pc += data.size();
             }
 
             _ => panic!("Emulation for the instruction not yet implemented!\n  {:?}", instruction)
-
         }
+        self.pc += instruction.machine_code.len() as u16;
     }
 }
 

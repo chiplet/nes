@@ -7,7 +7,7 @@ fn main() {
     println!("{:#?}", cpu.sr);
 
     for i in 0..3 {
-        cpu.tick();
+        cpu.tick().unwrap();
     }
 
     println!("{}", cpu.ram[0x0200]);

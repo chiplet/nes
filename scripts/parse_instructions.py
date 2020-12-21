@@ -44,25 +44,30 @@ def main():
         # operands
         if addr_mode in ["immediate", "(indirect,X)", "(indirect),Y", "zeropage", "zeropage,X", "zeropage,Y"]:
             print(f"    let arg = get_u8(bytes)?;")
-            print(f"    Ok(Instruction::{mnemonic}(InstructionData {{")
-            print(f"        opcode: bytes[0],")
+            print(f"    Ok(Instruction {{")
+            print(f"        ins_type: InstructionType::{mnemonic},")
+            print(f"        machine_code: bytes.to_vec().into_iter().take({size}).collect(),")
             print(f"        addr_mode: AddrMode::{namemap[addr_mode]}(arg),")
         elif addr_mode in ["accumulator", "implied"]:
-            print(f"    Ok(Instruction::{mnemonic}(InstructionData {{")
-            print(f"        opcode: bytes[0],")
+            print(f"    Ok(Instruction {{")
+            print(f"        ins_type: InstructionType::{mnemonic},")
+            print(f"        machine_code: bytes.to_vec().into_iter().take({size}).collect(),")
             print(f"        addr_mode: AddrMode::{namemap[addr_mode]},")
         elif addr_mode in ["absolute", "absolute,X", "absolute,Y", "indirect"]:
             print(f"    let arg = get_u16(bytes)?;")
-            print(f"    Ok(Instruction::{mnemonic}(InstructionData {{")
-            print(f"        opcode: bytes[0],")
+            print(f"    Ok(Instruction {{")
+            print(f"        ins_type: InstructionType::{mnemonic},")
+            print(f"        machine_code: bytes.to_vec().into_iter().take({size}).collect(),")
             print(f"        addr_mode: AddrMode::{namemap[addr_mode]}(arg),")
         elif addr_mode == "relative":
             print(f"    let arg = get_u8(bytes)?;")
-            print(f"    Ok(Instruction::{mnemonic}(InstructionData {{")
-            print(f"        opcode: bytes[0],")
+            print(f"    Ok(Instruction {{")
+            print(f"        ins_type: InstructionType::{mnemonic},")
+            print(f"        machine_code: bytes.to_vec().into_iter().take({size}).collect(),")
             print(f"        addr_mode: AddrMode::{namemap[addr_mode]}(arg as i8),")
 
-        print("    }))\n}")
+        print(f"        name: InstructionName::from(0x{opcode}),")
+        print("    })\n}")
 
         # 0x69 => {
         #     let arg = get_u8(bytes)?;
