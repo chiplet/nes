@@ -80,7 +80,7 @@ pub struct CPU {
 }
 impl CPU {
     pub fn init() -> Self {
-        let sample_program: [u8; 9] = [0x38, 0xa9, 0xff, 0x29, 0xaa, 0x29, 0x55, 0xB0, 0xf8];
+        let sample_program: [u8; 7] = [0xa9, 0xff, 0x38, 0x69, 0x00, 0xf0, 0xf9];
         let mut sample_ram = [0; 65536];
         for byte in sample_program.iter().enumerate() {
             sample_ram[byte.0] = *byte.1;
@@ -198,6 +198,14 @@ impl CPU {
             InstructionType::BCS => {
                 let operand = self.get_operand(instruction);
                 if self.sr.get_bit(CARRY_BIT) == 1 {
+                    self.pc = self.pc.wrapping_add((operand as i8) as u16);
+                }
+            }
+
+            // Branch on Result Zero
+            InstructionType::BEQ => {
+                let operand = self.get_operand(instruction);
+                if self.sr.get_bit(ZERO_BIT) == 1 {
                     self.pc = self.pc.wrapping_add((operand as i8) as u16);
                 }
             }
