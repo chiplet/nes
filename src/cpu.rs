@@ -245,7 +245,57 @@ impl CPU {
     }
 
 
-    // common functionality used to implement instruction emulation
+    /*** common functionality used to implement instruction emulation ***/
+    // get instruction operand according to the associated addressing mode
+    // operand of relative addressing is also returned as u8
+    fn get_operand(&self, instruction: &Instruction) -> u8 {
+        match &instruction.addr_mode {
+            AddrMode::A => {
+                self.a
+            }
+            AddrMode::Abs(addr) => {
+                self.ram[*addr as usize]
+            }
+            AddrMode::AbsX(addr) => {
+                self.ram[(*addr + self.x as u16) as usize]
+            }
+            AddrMode::AbsY(addr) => {
+                self.ram[(*addr + self.y as u16) as usize]
+            }
+            AddrMode::Imm(value) => {
+                *value
+            }
+            AddrMode::Impl => {
+                panic!("Calling get_operand() for implied addressing mode does not make sense.")
+            }
+            AddrMode::Ind(addr) => {
+                let indirect = self.ram[*addr as usize] as usize;
+                self.ram[indirect]
+            }
+            AddrMode::XInd(addr) => {
+                let indirect = self.ram[(*addr + self.x) as usize] as usize;
+                self.ram[indirect]
+            }
+            AddrMode::IndY(addr) => {
+                let indirect = self.ram[*addr as usize] as usize;
+                self.ram[indirect + self.y as usize]
+            }
+            AddrMode::Rel(value) => {
+                *value as u8
+            }
+            AddrMode::Zpg(addr) => {
+                self.ram[*addr as usize]
+            }
+            AddrMode::ZpgX(addr) => {
+                self.ram[(*addr + self.x) as usize]
+            }
+            AddrMode::ZpgY(addr) => {
+                self.ram[(*addr + self.y) as usize]
+            }
+        }
+    }
+
+    // set zero and negative flags based on value
     fn set_sr_nz(&mut self, value: u8) {
         self.sr.assign_bit(NEGATIVE_BIT, value.get_bit(7));
         match value {
