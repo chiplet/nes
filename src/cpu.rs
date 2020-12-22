@@ -210,6 +210,33 @@ impl CPU {
                 }
             }
 
+            // BIT  Test Bits in Memory with Accumulator
+            // TODO: implement
+
+            // Branch on Result Minus
+            InstructionType::BMI => {
+                let operand = self.get_operand(instruction);
+                if self.sr.get_bit(NEGATIVE_BIT) == 1 {
+                    self.pc = self.pc.wrapping_add((operand as i8) as u16);
+                }
+            }
+
+            // Branch on Result not Zero
+            InstructionType::BNE => {
+                let operand = self.get_operand(instruction);
+                if self.sr.get_bit(ZERO_BIT) == 0 {
+                    self.pc = self.pc.wrapping_add((operand as i8) as u16);
+                }
+            }
+
+            // Branch on Result Plus
+            InstructionType::BPL => {
+                let operand = self.get_operand(instruction);
+                if self.sr.get_bit(NEGATIVE_BIT) == 0 {
+                    self.pc = self.pc.wrapping_add((operand as i8) as u16);
+                }
+            }
+
             InstructionType::STA => {
                 match &instruction.addr_mode {
                     AddrMode::Abs(addr) => {
