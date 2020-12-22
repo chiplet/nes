@@ -192,7 +192,6 @@ impl InstructionName {
 }
 
 // Instruction to be executed by the processor and related useful information
-// TODO: format as disassembly and memory dump (String)
 #[derive(Debug)]
 pub struct Instruction {
     pub machine_code: Vec<u8>,

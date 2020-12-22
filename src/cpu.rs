@@ -2,53 +2,54 @@ mod isa;
 use crate::cpu::isa::{Instruction, AddrMode, InstructionType};
 use std::fmt;
 
-// 7  bit  0
-// ---- ----
-// NVss DIZC
-// |||| ||||
-// |||| |||+- Carry
-// |||| ||+-- Zero
-// |||| |+--- Interrupt Disable
-// |||| +---- Decimal
-// ||++------ No CPU effect, see: the B flag
-// |+-------- Overflow
-// +--------- Negative
+// Status Register bit descriptions
+//
+//   7  bit  0
+//   ---- ----
+//   NVss DIZC
+//   |||| ||||
+//   |||| |||+- Carry
+//   |||| ||+-- Zero
+//   |||| |+--- Interrupt Disable
+//   |||| +---- Decimal
+//   ||++------ No CPU effect, see: the B flag
+//   |+-------- Overflow
+//   +--------- Negative
+const CARRY_BIT: u8 = 0;
+const ZERO_BIT: u8 = 1;
+const INT_DISABLE_BIT: u8 = 2;
+const DECIMAL_BIT: u8 = 3;
+const OVERFLOW_BIT: u8 = 6;
+const NEGATIVE_BIT: u8 = 7;
 
-#[derive(Debug)]
-pub struct StatusRegister {
-    carry:              bool,
-    zero:               bool,
-    interrupt_disable:  bool,
-    // decimal
-    // reserved
-    // B-flag (not in use)
-    overflow:           bool,
-    negative:           bool,
+
+trait BitOps {
+    // common bit operations
+    fn set_bit(&mut self, index: u8);
+    fn clear_bit(&mut self, index: u8);
+    fn get_bit(&self, index: u8) -> u8;
 }
-impl StatusRegister {
-    fn init() -> Self {
-        StatusRegister {
-            carry: false,
-            zero: false,
-            interrupt_disable: true,
-            overflow: false,
-            negative: false,
+impl BitOps for u8 {
+    fn set_bit(&mut self, index: u8) {
+        if index < 0 || index > 7 {
+            panic!("Invalid bit index");
         }
+        *self |= 1 << index;
     }
-
-    // set and clear Status Register bits
-    pub fn set_carry(&mut self) { self.carry = true; }
-    pub fn clear_carry(&mut self) { self.carry = false; }
-    pub fn set_zero(&mut self) { self.zero = true; }
-    pub fn clear_zero(&mut self) { self.zero = false; }
-    pub fn set_interrupt_disable(&mut self) { self.interrupt_disable = true; }
-    pub fn clear_interrupt_disable(&mut self) { self.interrupt_disable = false; }
-    pub fn set_overflow(&mut self) { self.overflow = true; }
-    pub fn clear_overflow(&mut self) { self.overflow = false; }
-    pub fn set_negative(&mut self) { self.negative = true; }
-    pub fn clear_negative(&mut self) { self.negative = false; }
-
+    fn clear_bit(&mut self, index: u8) {
+        if index < 0 || index > 7 {
+            panic!("Invalid bit index");
+        }
+        *self &= !(1 << index);
+    }
+    fn get_bit(&self, index: u8) -> u8 {
+        if index < 0 || index > 7 {
+            panic!("Invalid bit index");
+        }
+        (*self >> index) & 1u8
+    }
 }
+
 
 /*** CPU structure ***/
 #[derive(Debug)]
@@ -56,15 +57,14 @@ pub struct CPU {
     // addressable memory space
     pub ram: [u8; 65536],
 
-    /*** Register definitions ***/
-    pub acc: u8,
+    // registers
+    pub a: u8,
     pub x: u8,
     pub y: u8,
-    pub sp: u8,  // TODO: should this be a struct?
+    pub sp: u8,
     pub pc: u16,
-    pub sr: StatusRegister,
+    pub sr: u8,
 }
-
 impl CPU {
     pub fn init() -> Self {
         let sample_program = [0xa9, 0x00, 0x69, 0x03, 0x8d, 0x00, 0x02];
@@ -73,25 +73,28 @@ impl CPU {
             sample_ram[byte.0] = *byte.1;
         }
 
+        // enable interrupt_disable bit on startup
+        let mut init_sr = 0;
+        init_sr.set_bit(INT_DISABLE_BIT);
+
         CPU {
             // zero out CPU memory
             // ram: [0; 65536],
             ram: sample_ram, // load sample program to $0000
 
             // init CPU registers
-            acc: 0,
+            a: 0,
             x: 0,
             y: 0,
-            sp: 0,
-            pc: 0,
-            sr: StatusRegister::init(),
+            sp: 0u8,
+            pc: 0u16,
+            sr: init_sr,
         }
     }
 
     // forward emulation by one clock cycle
     pub fn tick(&mut self) -> Result<(), String> {
         // Fetch
-        // FIXME: hardcoded to 3 byte slices
         let next_index = self.pc as usize;
         let instruction_bytes = &self.ram[next_index..next_index+3];
 
@@ -99,7 +102,7 @@ impl CPU {
         let instruction = Instruction::from(instruction_bytes)?;
 
         // print current instruction and CPU state before execution
-        println!("${:04x}: {:?} {}", self.pc, instruction, self);
+        println!("${:04x}: {}  {}      {}", self.pc, instruction, self, instruction.name.description);
 
         // Execute
         self.execute(&instruction);
@@ -114,31 +117,31 @@ impl CPU {
             InstructionType::LDA => {
                 match &instruction.addr_mode {
                     AddrMode::Imm(value) => {
-                        self.acc = *value;
+                        self.a = *value;
                     }
-                    AddrMode::Zpg(addr) => {
-                        self.acc = self.ram[*addr as usize];
+                    /*AddrMode::Zpg(addr) => {
+                        self.a = self.ram[*addr as usize];
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.acc = self.ram[(*addr + self.x) as usize];
+                        self.a = self.ram[(*addr + self.x) as usize];
                     }
                     AddrMode::Abs(addr) => {
-                        self.acc = self.ram[*addr as usize]
+                        self.a = self.ram[*addr as usize];
                     }
                     AddrMode::AbsX(addr) => {
-                        self.acc = self.ram[(*addr + self.x as u16) as usize];
+                        self.a = self.ram[(*addr + self.x as u16) as usize];
                     }
                     AddrMode::AbsY(addr) => {
-                        self.acc = self.ram[(addr + self.y as u16) as usize];
+                        self.a = self.ram[(addr + self.y as u16) as usize];
                     }
                     AddrMode::XInd(addr) => {
                         let indirect = self.ram[(addr + self.x) as usize] as usize;
-                        self.acc = self.ram[indirect];
+                        self.a = self.ram[indirect];
                     }
                     AddrMode::IndY(addr) => {
                         let indirect = self.ram[*addr as usize] as usize;
-                        self.acc = self.ram[indirect + self.y as usize];
-                    }
+                        self.a = self.ram[indirect + self.y as usize];
+                    }*/
                     _ => panic!("Illegal addressing mode for LDA!")
                 }
             }
@@ -147,59 +150,40 @@ impl CPU {
             InstructionType::ADC => {
                 match &instruction.addr_mode {
                     AddrMode::Imm(value) => {
-                        self.acc += value;
+                        // self.a += Register::from(*value);
+                        ()
                     }
-                    AddrMode::Zpg(addr) => {
-                        self.acc += self.ram[*addr as usize];
+/*                    AddrMode::Zpg(addr) => {
+                        self.a += self.ram[*addr as usize];
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.acc += self.ram[(*addr + self.x) as usize];
+                        self.a += self.ram[(*addr + self.x) as usize];
                     }
                     AddrMode::Abs(addr) => {
-                        self.acc += self.ram[*addr as usize]
+                        self.a += self.ram[*addr as usize];
                     }
                     AddrMode::AbsX(addr) => {
-                        self.acc += self.ram[(*addr + self.x as u16) as usize];
+                        self.a += self.ram[(*addr + self.x as u16) as usize];
                     }
                     AddrMode::AbsY(addr) => {
-                        self.acc += self.ram[(*addr + self.y as u16) as usize];
+                        self.a += self.ram[(*addr + self.y as u16) as usize];
                     }
                     AddrMode::XInd(addr) => {
                         let indirect = self.ram[(*addr + self.x) as usize] as usize;
-                        self.acc += self.ram[indirect];
+                        self.a += self.ram[indirect];
                     }
                     AddrMode::IndY(addr) => {
                         let indirect = self.ram[*addr as usize] as usize;
-                        self.acc += self.ram[indirect + self.y as usize];
-                    }
+                        self.a += self.ram[indirect + self.y as usize];
+                    }*/
                     _ => panic!("Illegal addressing mode for ADC!")
                 }
             }
 
             InstructionType::STA => {
                 match &instruction.addr_mode {
-                    AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = self.acc;
-                    }
-                    AddrMode::ZpgX(addr) => {
-                        self.ram[(*addr + self.x) as usize] = self.acc;
-                    }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = self.acc;
-                    }
-                    AddrMode::AbsX(addr) => {
-                        self.ram[(*addr + self.x as u16) as usize] = self.acc;
-                    }
-                    AddrMode::AbsY(addr) => {
-                        self.ram[(*addr + self.y as u16) as usize] = self.acc;
-                    }
-                    AddrMode::XInd(addr) => {
-                        let indirect = self.ram[(*addr + self.x) as usize] as usize;
-                        self.ram[indirect] = self.acc;
-                    }
-                    AddrMode::IndY(addr) => {
-                        let indirect = self.ram[*addr as usize] as usize;
-                        self.ram[indirect + self.y as usize] = self.acc;
+                        self.ram[*addr as usize] = self.a;
                     }
                     _ => panic!("Illegal addressing mode for LDA!")
                 }
@@ -209,23 +193,35 @@ impl CPU {
         }
         self.pc += instruction.machine_code.len() as u16;
     }
-}
 
-// TODO: format status register nicely
+    /** status register bit manipulation **/
+    fn set_sr_carry(&mut self) { self.sr.set_bit(CARRY_BIT)}
+    fn set_sr_interrupt_disable(&mut self) { self.sr.set_bit(INT_DISABLE_BIT)}
+    fn set_sr_negative(&mut self) { self.sr.set_bit(NEGATIVE_BIT)}
+    fn set_sr_overflow(&mut self) { self.sr.set_bit(OVERFLOW_BIT)}
+    fn set_sr_zero(&mut self) { self.sr.set_bit(ZERO_BIT)}
+    fn set_sr_decimal(&mut self) { self.sr.set_bit(DECIMAL_BIT)}
+
+    fn clear_sr_carry(&mut self) { self.sr.clear_bit(CARRY_BIT)}
+    fn clear_sr_interrupt_disable(&mut self) { self.sr.clear_bit(INT_DISABLE_BIT)}
+    fn clear_sr_negative(&mut self) { self.sr.clear_bit(NEGATIVE_BIT)}
+    fn clear_sr_overflow(&mut self) { self.sr.clear_bit(OVERFLOW_BIT)}
+    fn clear_sr_zero(&mut self) { self.sr.clear_bit(ZERO_BIT)}
+    fn clear_sr_decimal(&mut self) { self.sr.clear_bit(DECIMAL_BIT)}
+
+    fn get_sr_carry(&mut self) -> u8 { self.sr.get_bit(CARRY_BIT)}
+    fn get_sr_interrupt_disable(&mut self) -> u8 { self.sr.get_bit(INT_DISABLE_BIT)}
+    fn get_sr_negative(&mut self) -> u8 { self.sr.get_bit(NEGATIVE_BIT)}
+    fn get_sr_overflow(&mut self) -> u8 { self.sr.get_bit(OVERFLOW_BIT)}
+    fn get_sr_zero(&mut self) -> u8 { self.sr.get_bit(ZERO_BIT)}
+    fn get_sr_decimal(&mut self) -> u8 { self.sr.get_bit(DECIMAL_BIT)}
+}
 impl fmt::Display for CPU {
+    // TODO: format status register nicely
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ACC=${:02x} X=${:02x} Y=${:02x} SP=${:02x}",
-            self.acc, self.x, self.y, self.sp
+        write!(f, "A:${:02x} X:${:02x} Y:${:02x} SP:${:02x}",
+            self.a, self.x, self.y, self.sp
         )
-    }
-}
-
-struct Program {
-    instructions: Vec<Instruction>,
-}
-impl Program {
-    fn to_bytes(&self) -> Vec<u8> {
-        panic!("Program serialization not implemented.");
     }
 }
 
@@ -233,23 +229,98 @@ impl Program {
 #[cfg(test)]
 mod test {
     use crate::cpu::isa::{Instruction, AddrMode};
+    use crate::cpu::{BitOps, CPU};
 
     #[test]
-    fn decode_opcode_0x69_valid() {
-        let code: [u8; 2] = [0x69, 0x03];
-        if let Instruction::ADC(data) =  Instruction::decode(&code).unwrap() {
-            assert_eq!(0x69, data.opcode);
-            if let AddrMode::Imm(imm) = data.addr_mode {
-                assert_eq!(0x03, imm);
-            }
-        }
+    fn get_bit() {
+        let r = 0x55;
+        assert_eq!(1, r.get_bit(0));
+        assert_eq!(0, r.get_bit(1));
+        assert_eq!(1, r.get_bit(2));
+        assert_eq!(0, r.get_bit(3));
+        assert_eq!(1, r.get_bit(4));
+        assert_eq!(0, r.get_bit(5));
+        assert_eq!(1, r.get_bit(6));
+        assert_eq!(0, r.get_bit(7));
     }
 
     #[test]
-    #[should_panic]
-    fn decode_opcode_0x69_invalid() {
-        let code: [u8; 1] = [0x69];
-        Instruction::decode(&code).unwrap();
+    fn set_bit() {
+        let mut r = 0x00;
+        r.set_bit(0);
+        r.set_bit(2);
+        r.set_bit(4);
+        r.set_bit(6);
+
+        assert_eq!(0x55, r);
     }
 
+    #[test]
+    fn clear_bit() {
+        let mut r = 0xff;
+        r.clear_bit(0);
+        r.clear_bit(2);
+        r.clear_bit(4);
+        r.clear_bit(6);
+
+        assert_eq!(0xaa, r);
+    }
+
+    #[test]
+    fn sr_helpers() {
+        let mut cpu = CPU::init();
+
+        // test bits individually
+        cpu.sr = 0x00;
+        cpu.set_sr_carry();
+        assert_eq!(1, cpu.get_sr_carry());
+        cpu.sr = 0xff;
+        cpu.clear_sr_carry();
+        assert_eq!(0, cpu.get_sr_carry());
+
+        cpu.sr = 0x00;
+        cpu.set_sr_interrupt_disable();
+        assert_eq!(1, cpu.get_sr_interrupt_disable());
+        cpu.sr = 0xff;
+        cpu.clear_sr_interrupt_disable();
+        assert_eq!(0, cpu.get_sr_interrupt_disable());
+
+        cpu.sr = 0x00;
+        cpu.set_sr_negative();
+        assert_eq!(1, cpu.get_sr_negative());
+        cpu.sr = 0xff;
+        cpu.clear_sr_negative();
+        assert_eq!(0, cpu.get_sr_negative());
+
+        cpu.sr = 0x00;
+        cpu.set_sr_overflow();
+        assert_eq!(1, cpu.get_sr_overflow());
+        cpu.sr = 0xff;
+        cpu.clear_sr_overflow();
+        assert_eq!(0, cpu.get_sr_overflow());
+
+        cpu.sr = 0x00;
+        cpu.set_sr_zero();
+        assert_eq!(1, cpu.get_sr_zero());
+        cpu.sr = 0xff;
+        cpu.clear_sr_zero();
+        assert_eq!(0, cpu.get_sr_zero());
+
+        cpu.sr = 0x00;
+        cpu.set_sr_decimal();
+        assert_eq!(1, cpu.get_sr_decimal());
+        cpu.sr = 0xff;
+        cpu.clear_sr_decimal();
+        assert_eq!(0, cpu.get_sr_decimal());
+
+        // set all bits
+        cpu.sr = 0x00;
+        cpu.set_sr_carry();
+        cpu.set_sr_interrupt_disable();
+        cpu.set_sr_negative();
+        cpu.set_sr_overflow();
+        cpu.set_sr_zero();
+        cpu.set_sr_decimal();
+        assert_eq!(cpu.sr, 0b1100_1111);
+    }
 }
