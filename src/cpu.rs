@@ -79,7 +79,7 @@ pub struct CPU {
 }
 impl CPU {
     pub fn init() -> Self {
-        let sample_program: [u8; 21] = [0xa9, 0x00, 0x38, 0x69, 0x01, 0x18, 0x69, 0x01, 0x38, 0x69, 0x01, 0x38, 0xa9, 0xff, 0x69, 0x01, 0xe8, 0xc8, 0x4c, 0x10, 0x00];
+        let sample_program: [u8; 6] = [0xa9, 0xff, 0x29, 0xaa, 0x29, 0x55];
         let mut sample_ram = [0; 65536];
         for byte in sample_program.iter().enumerate() {
             sample_ram[byte.0] = *byte.1;
@@ -171,6 +171,14 @@ impl CPU {
 
                 self.sr.assign_bit(OVERFLOW_BIT, carry_6 ^ carry_out);
                 self.sr.assign_bit(CARRY_BIT, carry_out);
+                self.set_sr_nz(self.a);
+            }
+
+            // AND Memory with Accumulator
+            InstructionType::AND => {
+                let operand = self.get_operand(instruction);
+
+                self.a &= operand;
                 self.set_sr_nz(self.a);
             }
 
