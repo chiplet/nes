@@ -28,6 +28,7 @@ trait BitOps {
     fn set_bit(&mut self, index: u8);
     fn clear_bit(&mut self, index: u8);
     fn get_bit(&self, index: u8) -> u8;
+    fn assign_bit(&mut self, index: u8, value: u8);
 }
 impl BitOps for u8 {
     fn set_bit(&mut self, index: u8) {
@@ -47,6 +48,16 @@ impl BitOps for u8 {
             panic!("Invalid bit index");
         }
         (*self >> index) & 1u8
+    }
+    fn assign_bit(&mut self, index: u8, value: u8) {
+        if index < 0 || index > 7 {
+            panic!("Invalid bit index");
+        }
+        if value < 0 || value > 1 {
+            panic!("Bit can only be assigned values 0 or 1");
+        }
+        *self = *self & !(1u8 << index);    // clear bit at index
+        *self |= value << index;            // assign value to bit at index
     }
 }
 
@@ -109,7 +120,7 @@ impl CPU {
         Ok(())
     }
 
-    // execute a machine instruction
+    // execute single machine instruction
     fn execute(&mut self, instruction: &Instruction) {
         match instruction.ins_type {
 
@@ -215,6 +226,23 @@ impl CPU {
     fn get_sr_overflow(&mut self) -> u8 { self.sr.get_bit(OVERFLOW_BIT)}
     fn get_sr_zero(&mut self) -> u8 { self.sr.get_bit(ZERO_BIT)}
     fn get_sr_decimal(&mut self) -> u8 { self.sr.get_bit(DECIMAL_BIT)}
+
+    fn assign_sr_carry(&mut self) -> u8 { self.sr.get_bit(CARRY_BIT)}
+    fn assign_sr_interrupt_disable(&mut self) -> u8 { self.sr.get_bit(INT_DISABLE_BIT)}
+    fn assign_sr_negative(&mut self) -> u8 { self.sr.get_bit(NEGATIVE_BIT)}
+    fn assign_sr_overflow(&mut self) -> u8 { self.sr.get_bit(OVERFLOW_BIT)}
+    fn assign_sr_zero(&mut self) -> u8 { self.sr.get_bit(ZERO_BIT)}
+    fn assign_sr_decimal(&mut self) -> u8 { self.sr.get_bit(DECIMAL_BIT)}
+
+
+    // common functionality used to implement instruction emulation
+    fn set_sr_nz(&mut self, value: u8) {
+        self.sr.assign_bit(NEGATIVE_BIT, value.get_bit(7));
+        match value {
+            0 => self.sr.set_bit(ZERO_BIT),
+            _ => self.sr.clear_bit(ZERO_BIT),
+        }
+    }
 }
 impl fmt::Display for CPU {
     // TODO: format status register nicely
@@ -228,7 +256,6 @@ impl fmt::Display for CPU {
 
 #[cfg(test)]
 mod test {
-    use crate::cpu::isa::{Instruction, AddrMode};
     use crate::cpu::{BitOps, CPU};
 
     #[test]
@@ -264,6 +291,23 @@ mod test {
         r.clear_bit(6);
 
         assert_eq!(0xaa, r);
+    }
+
+    #[test]
+    fn assign_bit() {
+        let mut r = 0;
+        r.assign_bit(0, 1);
+        assert_eq!(r, 1);
+        r.assign_bit(0, 0);
+        assert_eq!(r, 0);
+
+        let mut r = 0xaa;               // 1010_1010
+        r.assign_bit(7, 0);     // 0010_1010
+        assert_eq!(r, 0x2a);
+        r.assign_bit(6, 1);     // 0110_1010
+        assert_eq!(r, 0x6a);
+        r.assign_bit(4, 1);     // 0111_1010
+        assert_eq!(r, 0x7a);
     }
 
     #[test]
