@@ -2,6 +2,7 @@ mod isa;
 use crate::cpu::isa::{Instruction, AddrMode, InstructionType};
 use std::fmt;
 use std::num::Wrapping;
+use crate::main;
 
 // Status Register bit descriptions
 //
@@ -79,7 +80,7 @@ pub struct CPU {
 }
 impl CPU {
     pub fn init() -> Self {
-        let sample_program: [u8; 6] = [0xa9, 0xff, 0x29, 0xaa, 0x29, 0x55];
+        let sample_program: [u8; 8] = [0xa9, 0xff, 0x29, 0xaa, 0x29, 0x55, 0x90, 0xf8];
         let mut sample_ram = [0; 65536];
         for byte in sample_program.iter().enumerate() {
             sample_ram[byte.0] = *byte.1;
@@ -182,6 +183,17 @@ impl CPU {
                 self.set_sr_nz(self.a);
             }
 
+            // ASL  Shift Left One Bit (Memory or Accumulator)
+            // TODO: implement
+
+            // Branch on Carry Clear
+            InstructionType::BCC => {
+                let operand = self.get_operand(instruction);
+                if self.sr.get_bit(CARRY_BIT) == 0 {
+                    self.pc = self.pc.wrapping_add((operand as i8) as u16);
+                }
+            }
+
             InstructionType::STA => {
                 match &instruction.addr_mode {
                     AddrMode::Abs(addr) => {
@@ -193,7 +205,9 @@ impl CPU {
 
             _ => panic!("Emulation for the instruction not yet implemented!\n  {:?}", instruction)
         }
-        self.pc += instruction.machine_code.len() as u16;
+
+        // addition is wrapping since some branch instructions rely on this behavior
+        self.pc = self.pc.wrapping_add(instruction.machine_code.len() as u16);
     }
 
 
