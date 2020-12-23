@@ -134,6 +134,7 @@ impl CPU {
 
             // parse target address and bytes from line
             let values = line
+                .trim()
                 .split(" ")
                 .collect::<Vec<&str>>();
 
@@ -270,10 +271,31 @@ impl CPU {
                 }
             }
 
+            // Store Accumulator in Memory
             InstructionType::STA => {
                 match &instruction.addr_mode {
+                    AddrMode::Zpg(addr) => {
+                        self.ram[*addr as usize] = self.a;
+                    }
+                    AddrMode::ZpgX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = self.a;
+                    }
                     AddrMode::Abs(addr) => {
                         self.ram[*addr as usize] = self.a;
+                    }
+                    AddrMode::AbsX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = self.a;
+                    }
+                    AddrMode::AbsY(addr) => {
+                        self.ram[*addr as usize + self.y as usize] = self.a;
+                    }
+                    AddrMode::XInd(addr) => {
+                        let indirect = self.ram[(*addr + self.x) as usize] as usize;
+                        self.ram[indirect] = self.a
+                    }
+                    AddrMode::IndY(addr) => {
+                        let indirect = self.ram[*addr as usize] as usize;
+                        self.ram[indirect + self.y as usize] = self.a
                     }
                     _ => panic!("Illegal addressing mode for STA!")
                 }
