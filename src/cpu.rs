@@ -68,7 +68,7 @@ impl BitOps for u8 {
 #[derive(Debug)]
 pub struct CPU {
     // addressable memory space
-    pub ram: [u8; 65536],
+    pub ram: Vec<u8>,
 
     // registers
     pub a: u8,
@@ -80,20 +80,13 @@ pub struct CPU {
 }
 impl CPU {
     pub fn init() -> Self {
-//        let sample_program: [u8; 7] = [0xa9, 0xff, 0x38, 0x69, 0x00, 0xf0, 0xf9];
-        let mut sample_ram = [0; 65536];
-//        for byte in sample_program.iter().enumerate() {
-//            sample_ram[byte.0] = *byte.1;
-//        }
-
         // enable interrupt_disable bit on startup
         let mut init_sr = 0;
         init_sr.set_bit(INT_DISABLE_BIT);
 
         CPU {
             // zero out CPU memory
-            // ram: [0; 65536],
-            ram: sample_ram, // load sample program to $0000
+            ram: vec![0; 65536],
 
             // init CPU registers
             a: 0,
@@ -150,6 +143,7 @@ impl CPU {
                 self.ram[addr as usize + b.0] = *b.1;
             }
         }
+        println!();
 
         Ok(())
     }
@@ -196,6 +190,21 @@ impl CPU {
                     _ => panic!("Illegal addressing mode for JMP!")
                 };
                 self.pc = jump_addr;
+                self.pc -= instruction.machine_code.len() as u16; // compensate for normal pc adjustment
+            }
+
+            // Jump to New Location Saving Return Address
+            InstructionType::JSR => {
+                if let AddrMode::Abs(addr) = &instruction.addr_mode {
+                    self.stack_push(self.pc+2);
+                    self.pc = *addr;
+                    self.pc -= instruction.machine_code.len() as u16; // compensate for normal pc adjustment
+                }
+            }
+
+            // Return from Subroutine
+            InstructionType::RTS => {
+                self.pc = self.stack_pop()+1;
                 self.pc -= instruction.machine_code.len() as u16; // compensate for normal pc adjustment
             }
 
@@ -377,6 +386,28 @@ impl CPU {
 
         // addition is wrapping since some branch instructions rely on this behavior
         self.pc = self.pc.wrapping_add(instruction.machine_code.len() as u16);
+    }
+
+    // stack manipulation
+    fn stack_push_byte(&mut self, byte: u8) {
+        self.ram[0x0100 as usize + self.sp as usize] = byte;
+        self.sp = (Wrapping(self.sp) - Wrapping(1u8)).0;
+    }
+    // pop byte from stack
+    fn stack_pop_byte(&mut self) -> u8 {
+        self.sp = (Wrapping(self.sp) + Wrapping(1u8)).0;
+        self.ram[0x0100 as usize + self.sp as usize]
+    }
+    // push u16 to stack (high byte first)
+    fn stack_push(&mut self, value: u16) {
+        self.stack_push_byte((value >> 8) as u8);
+        self.stack_push_byte((value & 0xff) as u8);
+    }
+    // pop u16 from stack
+    fn stack_pop(&mut self) -> u16 {
+        let low_byte = self.stack_pop_byte();
+        let high_byte = self.stack_pop_byte();
+        (high_byte as u16) << 8 | (low_byte as u16)
     }
 
 

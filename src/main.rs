@@ -5,7 +5,7 @@ use crate::cpu::CPU;
 fn main() {
     let mut cpu = CPU::init();
 
-    cpu.load_hexdump("./hexdumps/test.txt").unwrap();
+    cpu.load_hexdump("./hexdumps/tmp.txt").unwrap();
     cpu.pc = 0x0600;
 
     loop {
