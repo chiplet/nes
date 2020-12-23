@@ -164,6 +164,12 @@ impl CPU {
                 self.set_sr_nz(self.a);
             }
 
+            // Load Index X with Memory
+            InstructionType::LDX => {
+                self.x = self.get_operand(instruction);
+                self.set_sr_nz(self.x);
+            }
+
             // Set Carry Flag
             InstructionType::SEC => { self.sr.set_bit(CARRY_BIT); }
 
@@ -299,6 +305,71 @@ impl CPU {
                     }
                     _ => panic!("Illegal addressing mode for STA!")
                 }
+            }
+
+            // Store Index X in Memory
+            InstructionType::STX => {
+                match &instruction.addr_mode {
+                    AddrMode::Zpg(addr) => {
+                        self.ram[*addr as usize] = self.x;
+                    }
+                    AddrMode::ZpgY(addr) => {
+                        self.ram[*addr as usize + self.y as usize] = self.x;
+                    }
+                    AddrMode::Abs(addr) => {
+                        self.ram[*addr as usize] = self.x;
+                    }
+                    _ => panic!("Illegal addressing mode for STX!")
+                }
+            }
+
+            // Sore Index Y in Memory
+            InstructionType::STY => {
+                match &instruction.addr_mode {
+                    AddrMode::Zpg(addr) => {
+                        self.ram[*addr as usize] = self.y;
+                    }
+                    AddrMode::ZpgX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = self.y;
+                    }
+                    AddrMode::Abs(addr) => {
+                        self.ram[*addr as usize] = self.y;
+                    }
+                    _ => panic!("Illegal addressing mode for STX!")
+                }
+            }
+
+            // Transfer Accumulator to Index X
+            InstructionType::TAX => {
+                self.x = self.a;
+                self.set_sr_nz(self.x);
+            }
+
+            // Transfer Accumulator to Index Y
+            InstructionType::TAY => {
+                self.y = self.a;
+                self.set_sr_nz(self.y);
+            }
+
+            // Transfer Stack Pointer to Index X
+            InstructionType::TSX => {
+                self.x = self.sp;
+                self.set_sr_nz(self.x);
+            }
+
+            // Transfer Index X to Accumulator
+            InstructionType::TXA => {
+                self.a = self.x;
+                self.set_sr_nz(self.a);
+            }
+
+            // Transfer Index X to Stack Register
+            InstructionType::TXS => { self.sp = self.x; }
+
+            // Transfer Index X to Stack Register
+            InstructionType::TYA => {
+                self.a = self.y;
+                self.set_sr_nz(self.a);
             }
 
             _ => panic!("Emulation for the instruction not yet implemented!\n  {:?}", instruction)
