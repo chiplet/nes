@@ -691,7 +691,7 @@ impl Instruction {
             }
             0xCA => {
                 Ok(Instruction {
-                    ins_type: InstructionType::DEC,
+                    ins_type: InstructionType::DEX,
                     machine_code: bytes.to_vec().into_iter().take(1).collect(),
                     addr_mode: AddrMode::Impl,
                     name: InstructionName::from(0xCA),
@@ -699,7 +699,7 @@ impl Instruction {
             }
             0x88 => {
                 Ok(Instruction {
-                    ins_type: InstructionType::DEC,
+                    ins_type: InstructionType::DEY,
                     machine_code: bytes.to_vec().into_iter().take(1).collect(),
                     addr_mode: AddrMode::Impl,
                     name: InstructionName::from(0x88),

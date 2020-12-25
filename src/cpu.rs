@@ -368,7 +368,61 @@ impl CPU {
             // Compare Memory with Accumulator
             InstructionType::CMP => {
                 let operand = self.get_operand(instruction);
-                panic!("TODO: implement subtraction first!");
+                let result = self.a.overflowing_sub(operand).0;
+                if self.a >= operand {
+                    self.sr.set_bit(CARRY_BIT);
+                }
+                self.set_sr_nz(result)
+            }
+
+            // Compare Memory with Accumulator
+            InstructionType::CPX => {
+                let operand = self.get_operand(instruction);
+                let result = self.x.overflowing_sub(operand).0;
+                if self.x >= operand {
+                    self.sr.set_bit(CARRY_BIT);
+                }
+                self.set_sr_nz(result)
+            }
+
+            // Compare Memory with Accumulator
+            InstructionType::CPY => {
+                let operand = self.get_operand(instruction);
+                let result = self.y.overflowing_sub(operand).0;
+                if self.y >= operand {
+                    self.sr.set_bit(CARRY_BIT);
+                }
+                self.set_sr_nz(result)
+            }
+
+            InstructionType::DEC => {
+                let operand = self.get_operand(instruction);
+                let result = operand.overflowing_sub(1).0;
+                match &instruction.addr_mode {
+                    AddrMode::Zpg(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::ZpgX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    AddrMode::Abs(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::AbsX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    _ => panic!("Illegal addressing mode for DEC!")
+                }
+            }
+
+            InstructionType::DEX => {
+                self.x = self.x.overflowing_sub(1).0;
+                self.set_sr_nz(self.x);
+            }
+
+            InstructionType::DEY => {
+                self.y = self.y.overflowing_sub(1).0;
+                self.set_sr_nz(self.y);
             }
 
             // Store Accumulator in Memory
