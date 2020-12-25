@@ -215,8 +215,29 @@ impl CPU {
 
             // Subtract Memory from Accumulator with Borrow
             InstructionType::SBC => {
-                let operand = self.get_operand(instruction);
+                let operand = !self.get_operand(instruction);
+                let carry_in = self.sr.get_bit(CARRY_BIT);
 
+                // set overflow flag if appropriate
+                let carry_in_added_i8 = (self.a as i8).overflowing_add(carry_in as i8);
+                let operand_added_i8 = carry_in_added_i8.0.overflowing_add(operand as i8);
+                let overflow: u8 = match carry_in_added_i8.1 | operand_added_i8.1 {
+                    false => 0u8,
+                    true => 1u8,
+                };
+
+                // compute sum and carry out flag
+                let carry_in_added = self.a.overflowing_add(carry_in);
+                let operand_added = carry_in_added.0.overflowing_add(operand);
+                let carry_out: u8 = match carry_in_added.1 | operand_added.1 {
+                    false => 0,
+                    true => 1,
+                };
+
+                self.a = operand_added.0;
+                self.sr.assign_bit(OVERFLOW_BIT, overflow);
+                self.sr.assign_bit(CARRY_BIT, carry_out);
+                self.set_sr_nz(self.a);
             }
 
             // Add Memory to Accumulator with Carry
@@ -685,5 +706,40 @@ mod test {
         }
         assert_eq!(cpu.sr.get_bit(OVERFLOW_BIT), 0);
         assert_eq!(cpu.a, 0x7f);
+    }
+
+    #[test]
+    fn sbc_carry_flag() {
+        let mut cpu = CPU::init();
+
+        cpu.load_hexdump("./hexdumps/tests/sbc_overflow_test.txt").unwrap();
+        cpu.pc = 0x0600;
+
+        // SEC, LDA #$50, SBC #$b0
+        // 80 - -80 = -96 (should set overflow)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(OVERFLOW_BIT), 1);
+        assert_eq!(cpu.a, 0xa0);
+        assert_eq!(cpu.sr.get_bit(CARRY_BIT), 1u8 - 1);
+
+        // SEC, LDA #$d0, SBC #$70
+        // -48 - 112 = 96 >(should set overflow)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(OVERFLOW_BIT), 1);
+        assert_eq!(cpu.a, 0x60);
+        assert_eq!(cpu.sr.get_bit(CARRY_BIT), 1u8 - 0);
+
+        // SEC, LDA #$50, SBC #$f0
+        // 80 - -16 = 96 >(should not set overflow)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(OVERFLOW_BIT), 0);
+        assert_eq!(cpu.a, 0x60);
+        assert_eq!(cpu.sr.get_bit(CARRY_BIT), 1u8 - 1);
     }
 }
