@@ -597,7 +597,7 @@ mod test {
     fn adc_overflow_flag() {
         let mut cpu = CPU::init();
 
-        cpu.load_hexdump("./hexdumps/adc_carry_test.txt").unwrap();
+        cpu.load_hexdump("./hexdumps/tests/adc_carry_test.txt").unwrap();
         cpu.pc = 0x0600;
 
         // CLC, LDA #$FF, ADC #$01
