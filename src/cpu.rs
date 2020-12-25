@@ -223,19 +223,25 @@ impl CPU {
             InstructionType::ADC => {
                 let operand = self.get_operand(instruction);
                 let carry_in = self.sr.get_bit(CARRY_BIT);
-                let carry_6 = operand.get_bit(6) & self.a.get_bit(6);
 
-                // compute sum
+                // set overflow flag if appropriate
+                let carry_in_added_i8 = (self.a as i8).overflowing_add(carry_in as i8);
+                let operand_added_i8 = carry_in_added_i8.0.overflowing_add(operand as i8);
+                let overflow: u8 = match carry_in_added_i8.1 | operand_added_i8.1 {
+                    false => 0u8,
+                    true => 1u8,
+                };
+
+                // compute sum and carry out flag
                 let carry_in_added = self.a.overflowing_add(carry_in);
                 let operand_added = carry_in_added.0.overflowing_add(operand);
-
                 let carry_out: u8 = match carry_in_added.1 | operand_added.1 {
                     false => 0,
                     true => 1,
                 };
 
                 self.a = operand_added.0;
-                self.sr.assign_bit(OVERFLOW_BIT, carry_6 ^ carry_out);
+                self.sr.assign_bit(OVERFLOW_BIT, overflow);
                 self.sr.assign_bit(CARRY_BIT, carry_out);
                 self.set_sr_nz(self.a);
             }
@@ -539,7 +545,7 @@ impl fmt::Display for CPU {
 
 #[cfg(test)]
 mod test {
-    use crate::cpu::{BitOps, CPU, CARRY_BIT};
+    use crate::cpu::{BitOps, CPU, CARRY_BIT, OVERFLOW_BIT};
 
     #[test]
     fn get_bit() {
@@ -594,7 +600,7 @@ mod test {
     }
 
     #[test]
-    fn adc_overflow_flag() {
+    fn adc_carry_flag() {
         let mut cpu = CPU::init();
 
         cpu.load_hexdump("./hexdumps/tests/adc_carry_test.txt").unwrap();
@@ -639,5 +645,45 @@ mod test {
         }
         assert_eq!(cpu.sr.get_bit(CARRY_BIT), 0);
         assert_eq!(cpu.a, 0xc0);
+    }
+
+    #[test]
+    fn adc_overflow_flag() {
+        let mut cpu = CPU::init();
+
+        cpu.load_hexdump("./hexdumps/tests/adc_overflow_test.txt").unwrap();
+        cpu.pc = 0x0600;
+
+        // CLC, LDA #$50, ADC #$50
+        // 80 + 80 = 160 > 127 (should set overflow)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(OVERFLOW_BIT), 1);
+        assert_eq!(cpu.a, 0xa0);
+
+        // CLC, LDA #$7f, ADC #$01
+        // 127 + 1 = 128 > 127 (should set overflow)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(OVERFLOW_BIT), 1);
+        assert_eq!(cpu.a, 0x80);
+
+        // SEC, LDA #$7f, ADC #$00
+        // 127 + 0 + 1 = 128 > 127 (should set overflow)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(OVERFLOW_BIT), 1);
+        assert_eq!(cpu.a, 0x80);
+
+        // CLC, LDA #$7e, ADC #$00
+        // 126 + 1 = 127 <= 127 (should not set overflow)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(OVERFLOW_BIT), 0);
+        assert_eq!(cpu.a, 0x7f);
     }
 }
