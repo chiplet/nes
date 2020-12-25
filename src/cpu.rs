@@ -34,25 +34,25 @@ trait BitOps {
 }
 impl BitOps for u8 {
     fn set_bit(&mut self, index: u8) {
-        if index < 0 || index > 7 {
+        if index > 7 {
             panic!("Invalid bit index");
         }
         *self |= 1 << index;
     }
     fn clear_bit(&mut self, index: u8) {
-        if index < 0 || index > 7 {
+        if index > 7 {
             panic!("Invalid bit index");
         }
         *self &= !(1 << index);
     }
     fn get_bit(&self, index: u8) -> u8 {
-        if index < 0 || index > 7 {
+        if index > 7 {
             panic!("Invalid bit index");
         }
         (*self >> index) & 1u8
     }
     fn assign_bit(&mut self, index: u8, value: u8) {
-        if index < 0 || index > 7 {
+        if index > 7 {
             panic!("Invalid bit index");
         }
         if value < 0 || value > 1 {
@@ -164,11 +164,16 @@ impl CPU {
                 self.set_sr_nz(self.x);
             }
 
+            // Load Index Y with Memory
+            InstructionType::LDY => {
+                self.y = self.get_operand(instruction);
+                self.set_sr_nz(self.y);
+            }
+
+            InstructionType::NOP => {}
+
             // Set Carry Flag
             InstructionType::SEC => { self.sr.set_bit(CARRY_BIT); }
-
-            // Clear Carry Flag
-            InstructionType::CLC => { self.sr.clear_bit(CARRY_BIT); }
 
             // Increment Index X by One
             InstructionType::INX => {
@@ -208,17 +213,28 @@ impl CPU {
                 self.pc -= instruction.machine_code.len() as u16; // compensate for normal pc adjustment
             }
 
+            // Subtract Memory from Accumulator with Borrow
+            InstructionType::SBC => {
+                let operand = self.get_operand(instruction);
+
+            }
+
             // Add Memory to Accumulator with Carry
             InstructionType::ADC => {
                 let operand = self.get_operand(instruction);
-
                 let carry_in = self.sr.get_bit(CARRY_BIT);
-                let carry_out = operand.get_bit(7) & self.a.get_bit(7);
                 let carry_6 = operand.get_bit(6) & self.a.get_bit(6);
 
-                let sum_wrapped = Wrapping(self.a) + Wrapping(operand) + Wrapping(carry_in);
-                self.a = sum_wrapped.0;
+                // compute sum
+                let carry_in_added = self.a.overflowing_add(carry_in);
+                let operand_added = carry_in_added.0.overflowing_add(operand);
 
+                let carry_out: u8 = match carry_in_added.1 | operand_added.1 {
+                    false => 0,
+                    true => 1,
+                };
+
+                self.a = operand_added.0;
                 self.sr.assign_bit(OVERFLOW_BIT, carry_6 ^ carry_out);
                 self.sr.assign_bit(CARRY_BIT, carry_out);
                 self.set_sr_nz(self.a);
@@ -284,6 +300,48 @@ impl CPU {
                 if self.sr.get_bit(NEGATIVE_BIT) == 0 {
                     self.pc = self.pc.wrapping_add((operand as i8) as u16);
                 }
+            }
+
+            // Force Break
+            InstructionType::BRK => {
+                panic!("TODO: implement CPU interrupts");
+                self.stack_push(self.pc+2);
+                self.stack_push_byte(self.sr);
+                self.sr.set_bit(INT_DISABLE_BIT);
+            }
+
+            // Branch on Overflow Clear
+            InstructionType::BVC => {
+                let operand = self.get_operand(instruction);
+                if self.sr.get_bit(OVERFLOW_BIT) == 0 {
+                    self.pc = self.pc.wrapping_add((operand as i8) as u16);
+                }
+            }
+
+            // Branch on Overflow Set
+            InstructionType::BVS => {
+                let operand = self.get_operand(instruction);
+                if self.sr.get_bit(OVERFLOW_BIT) == 1 {
+                    self.pc = self.pc.wrapping_add((operand as i8) as u16);
+                }
+            }
+
+            // Clear Carry Flag
+            InstructionType::CLC => { self.sr.clear_bit(CARRY_BIT); }
+
+            // Clear Decimal Mode
+            InstructionType::CLD => { self.sr.clear_bit(DECIMAL_BIT); }
+
+            // Clear Interrupt Disable Bit
+            InstructionType::CLI => { self.sr.clear_bit(INT_DISABLE_BIT); }
+
+            // Clear Overflow Flag
+            InstructionType::CLV => { self.sr.clear_bit(OVERFLOW_BIT); }
+
+            // Compare Memory with Accumulator
+            InstructionType::CMP => {
+                let operand = self.get_operand(instruction);
+                panic!("TODO: implement subtraction first!");
             }
 
             // Store Accumulator in Memory
@@ -481,7 +539,7 @@ impl fmt::Display for CPU {
 
 #[cfg(test)]
 mod test {
-    use crate::cpu::{BitOps, CPU};
+    use crate::cpu::{BitOps, CPU, CARRY_BIT};
 
     #[test]
     fn get_bit() {
@@ -533,5 +591,53 @@ mod test {
         assert_eq!(r, 0x6a);
         r.assign_bit(4, 1);     // 0111_1010
         assert_eq!(r, 0x7a);
+    }
+
+    #[test]
+    fn adc_overflow_flag() {
+        let mut cpu = CPU::init();
+
+        cpu.load_hexdump("./hexdumps/adc_carry_test.txt").unwrap();
+        cpu.pc = 0x0600;
+
+        // CLC, LDA #$FF, ADC #$01
+        // sum: 1111_1111 + 0000_0001 (should carry)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(CARRY_BIT), 1);
+        assert_eq!(cpu.a, 0x00);
+
+        // CLC, LDA #$80, ADC #$80
+        // sum: 1000_000 + 1000_0000 (should carry)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(CARRY_BIT), 1);
+        assert_eq!(cpu.a, 0x00);
+
+        // CLC, LDA #$C0, ADC #$40
+        // sum: 1100_000 + 0100_0000 (should carry)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(CARRY_BIT), 1);
+        assert_eq!(cpu.a, 0x00);
+
+        // SEC, LDA #$fe, ADC #$01
+        // sum: 1111_1110 + 0000_0001 (should carry)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(CARRY_BIT), 1);
+        assert_eq!(cpu.a, 0x00);
+
+        // CLC, LDA #$80, ADC #$40
+        // sum: 1000_000 + 0100_0000 (should not carry)
+        for _i in 0..3 {
+            cpu.tick().unwrap();
+        }
+        assert_eq!(cpu.sr.get_bit(CARRY_BIT), 0);
+        assert_eq!(cpu.a, 0xc0);
     }
 }
