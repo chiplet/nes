@@ -170,42 +170,40 @@ impl CPU {
                 self.set_sr_nz(self.y);
             }
 
+            // Shift One Bit Right (Memory or Accumulator)
+            InstructionType::LSR => {
+                let operand = self.get_operand(instruction);
+                let result = operand >> 1;
+
+                // rightmost bit gets assigned to carry
+                self.sr.assign_bit(CARRY_BIT, operand.get_bit(0));
+                self.set_sr_nz(result);
+
+                match &instruction.addr_mode {
+                    AddrMode::A => {
+                        self.a = result;
+                    }
+                    AddrMode::Zpg(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::ZpgX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    AddrMode::Abs(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::AbsX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    _ => panic!("Illegal addressing mode for STA!")
+                }
+            }
+
+            // No Operation
             InstructionType::NOP => {}
 
             // Set Carry Flag
             InstructionType::SEC => { self.sr.set_bit(CARRY_BIT); }
-
-            // Increment Index X by One
-            InstructionType::INX => {
-                self.x = (Wrapping(self.x) + Wrapping(1)).0;
-                self.set_sr_nz(self.x);
-            }
-
-            // Increment Index Y by One
-            InstructionType::INY => {
-                self.y = (Wrapping(self.y) + Wrapping(1)).0;
-                self.set_sr_nz(self.y);
-            }
-
-            // Jump to New Location
-            InstructionType::JMP => {
-                let jump_addr = match &instruction.addr_mode {
-                    AddrMode::Abs(addr) => *addr,
-                    AddrMode::Ind(addr) => { panic!("Indirect jump addressing not implemented!") }
-                    _ => panic!("Illegal addressing mode for JMP!")
-                };
-                self.pc = jump_addr;
-                self.pc -= instruction.machine_code.len() as u16; // compensate for normal pc adjustment
-            }
-
-            // Jump to New Location Saving Return Address
-            InstructionType::JSR => {
-                if let AddrMode::Abs(addr) = &instruction.addr_mode {
-                    self.stack_push(self.pc+2);
-                    self.pc = *addr;
-                    self.pc -= instruction.machine_code.len() as u16; // compensate for normal pc adjustment
-                }
-            }
 
             // Return from Subroutine
             InstructionType::RTS => {
@@ -303,7 +301,15 @@ impl CPU {
             }
 
             // BIT  Test Bits in Memory with Accumulator
-            // TODO: implement
+            InstructionType::BIT => {
+                let operand = self.get_operand(instruction);
+                self.sr.assign_bit(NEGATIVE_BIT, operand.get_bit(NEGATIVE_BIT));
+                self.sr.assign_bit(OVERFLOW_BIT, operand.get_bit(OVERFLOW_BIT));
+                match self.a & operand {
+                    0 => self.sr.set_bit(ZERO_BIT),
+                    _ => self.sr.clear_bit(ZERO_BIT),
+                }
+            }
 
             // Branch on Result Minus
             InstructionType::BMI => {
@@ -398,6 +404,7 @@ impl CPU {
             InstructionType::DEC => {
                 let operand = self.get_operand(instruction);
                 let result = operand.overflowing_sub(1).0;
+                self.set_sr_nz(result);
                 match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
                         self.ram[*addr as usize] = result;
@@ -423,6 +430,60 @@ impl CPU {
             InstructionType::DEY => {
                 self.y = self.y.overflowing_sub(1).0;
                 self.set_sr_nz(self.y);
+            }
+
+            // Increment Memory by One
+            InstructionType::INC => {
+                let operand = self.get_operand(instruction);
+                let result = operand.overflowing_add(1).0;
+                self.set_sr_nz(result);
+                match &instruction.addr_mode {
+                    AddrMode::Zpg(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::ZpgX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    AddrMode::Abs(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::AbsX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    _ => panic!("Illegal addressing mode for INC!")
+                }
+            }
+
+            // Increment Index X by One
+            InstructionType::INX => {
+                self.x = self.x.overflowing_add(1).0;
+                self.set_sr_nz(self.x);
+            }
+
+            // Increment Index Y by One
+            InstructionType::INY => {
+                self.y = self.y.overflowing_add(1).0;
+                self.set_sr_nz(self.y);
+            }
+
+            // Jump to New Location
+            InstructionType::JMP => {
+                let jump_addr = match &instruction.addr_mode {
+                    AddrMode::Abs(addr) => *addr,
+                    AddrMode::Ind(addr) => { panic!("Indirect jump addressing not implemented!") }
+                    _ => panic!("Illegal addressing mode for JMP!")
+                };
+                self.pc = jump_addr;
+                self.pc -= instruction.machine_code.len() as u16; // compensate for normal pc adjustment
+            }
+
+            // Jump to New Location Saving Return Address
+            InstructionType::JSR => {
+                if let AddrMode::Abs(addr) = &instruction.addr_mode {
+                    self.stack_push(self.pc+2);
+                    self.pc = *addr;
+                    self.pc -= instruction.machine_code.len() as u16; // compensate for normal pc adjustment
+                }
             }
 
             // Store Accumulator in Memory
