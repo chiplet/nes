@@ -1,8 +1,12 @@
 mod isa;
 use crate::cpu::isa::{Instruction, AddrMode, InstructionType};
 use crate::util;
-use std::fmt;
-use std::num::Wrapping;
+use std::{
+    fs,
+    fmt,
+    num::Wrapping
+};
+
 
 // Status Register bit descriptions
 //
@@ -144,6 +148,26 @@ impl CPU {
             }
         }
         println!();
+
+        Ok(())
+    }
+
+    // read raw bytes from a binary file and load bytes to memory
+    // start writing to ram from offset
+    pub fn load_ines(&mut self, filename: &str) -> Result<(), String> {
+        // FIXME: currently hardcoded to load nestest.nes
+        println!("Loading memory from ines file: {}", filename);
+        let bytes = match fs::read(filename) {
+            Ok(bytes) => Ok(bytes),
+            Err(e) => Err(format!("{}", e)),
+        }?;
+        println!();
+
+        // TODO: add error handling
+
+        for i in 0..0x4000 {
+            self.ram[0xc000 + i] = bytes[i + 0x10];
+        }
 
         Ok(())
     }
@@ -856,5 +880,17 @@ mod test {
         assert_eq!(cpu.sr.get_bit(OVERFLOW_BIT), 0);
         assert_eq!(cpu.a, 0x60);
         assert_eq!(cpu.sr.get_bit(CARRY_BIT), 1u8 - 1);
+    }
+
+    #[test]
+    fn functional_test() {
+        // TODO: Add asserts
+        let mut cpu = CPU::init();
+
+        cpu.load_ines("./hexdumps/tests/nestest.nes").unwrap();
+        cpu.pc = 0xc000;
+        loop {
+            cpu.tick();
+        }
     }
 }
