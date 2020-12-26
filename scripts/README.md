@@ -1,4 +1,4 @@
-This directory contains text files describing the 6502 Instruction Set Architecture and its addressing modes.
+This directory contains text files describing the 6502 Instruction Set Architecture, and python scripts for generating Rust code from them.
 
 The information has been mostly adapted from: https://www.masswerk.at/6502/6502_instruction_set.html
 
