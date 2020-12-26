@@ -219,15 +219,107 @@ impl CPU {
                     AddrMode::AbsX(addr) => {
                         self.ram[*addr as usize + self.x as usize] = result;
                     }
-                    _ => panic!("Illegal addressing mode for STA!")
+                    _ => panic!("Illegal addressing mode for LSR!")
                 }
             }
 
             // No Operation
             InstructionType::NOP => {}
 
-            // Set Carry Flag
-            InstructionType::SEC => { self.sr.set_bit(CARRY_BIT); }
+            // OR Memory with Accumulator
+            InstructionType::ORA => {
+                let operand = self.get_operand(instruction);
+                self.a |= operand;
+                self.set_sr_nz(self.a);
+            }
+
+            // Push Accumulator on Stack
+            InstructionType::PHA => {
+                self.stack_push_byte(self.a);
+            }
+
+            // Push Processor Status on Stack
+            InstructionType::PHP => {
+                self.stack_push_byte(self.sr);
+            }
+
+            // Pull Accumulator from Stack
+            InstructionType::PLA => {
+                self.a = self.stack_pop_byte();
+                self.set_sr_nz(self.a);
+            }
+
+            // Pull Processor Status from Stack
+            InstructionType::PLP => {
+                self.sr = self.stack_pop_byte();
+            }
+
+            // Rotate One Bit Left (Memory or Accumulator)
+            InstructionType::ROL => {
+                let operand = self.get_operand(instruction);
+                let mut result = operand << 1;
+                result.assign_bit(0, self.sr.get_bit(CARRY_BIT));
+
+                // rightmost bit gets assigned to carry
+                self.sr.assign_bit(CARRY_BIT, operand.get_bit(7));
+                self.set_sr_nz(result);
+
+                match &instruction.addr_mode {
+                    AddrMode::A => {
+                        self.a = result;
+                    }
+                    AddrMode::Zpg(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::ZpgX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    AddrMode::Abs(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::AbsX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    _ => panic!("Illegal addressing mode for ROL!")
+                }
+            }
+
+            // Rotate One Bit Right (Memory or Accumulator)
+            InstructionType::ROR => {
+                let operand = self.get_operand(instruction);
+                let mut result = operand >> 1;
+                result.assign_bit(7, self.sr.get_bit(CARRY_BIT));
+
+                // rightmost bit gets assigned to carry
+                self.sr.assign_bit(CARRY_BIT, operand.get_bit(0));
+                self.set_sr_nz(result);
+
+                match &instruction.addr_mode {
+                    AddrMode::A => {
+                        self.a = result;
+                    }
+                    AddrMode::Zpg(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::ZpgX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    AddrMode::Abs(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::AbsX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    _ => panic!("Illegal addressing mode for ROR!")
+                }
+            }
+
+            // Return from Interrupt
+            InstructionType::RTI => {
+                self.sr = self.stack_pop_byte();
+                self.pc = self.stack_pop();
+                self.pc -= instruction.machine_code.len() as u16; // compensate for normal pc adjustment
+            }
 
             // Return from Subroutine
             InstructionType::RTS => {
@@ -261,6 +353,15 @@ impl CPU {
                 self.sr.assign_bit(CARRY_BIT, carry_out);
                 self.set_sr_nz(self.a);
             }
+
+            // Set Carry Flag
+            InstructionType::SEC => { self.sr.set_bit(CARRY_BIT); }
+
+            // Set Decimal Flag
+            InstructionType::SED => { self.sr.set_bit(DECIMAL_BIT); }
+
+            // Set Interrupt Disable Status
+            InstructionType::SEI => { self.sr.set_bit(INT_DISABLE_BIT); }
 
             // Add Memory to Accumulator with Carry
             InstructionType::ADC => {
@@ -298,7 +399,33 @@ impl CPU {
             }
 
             // ASL  Shift Left One Bit (Memory or Accumulator)
-            // TODO: implement
+            InstructionType::ASL => {
+                let operand = self.get_operand(instruction);
+                let result = operand << 1;
+
+                // rightmost bit gets assigned to carry
+                self.sr.assign_bit(CARRY_BIT, operand.get_bit(7));
+                self.set_sr_nz(result);
+
+                match &instruction.addr_mode {
+                    AddrMode::A => {
+                        self.a = result;
+                    }
+                    AddrMode::Zpg(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::ZpgX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    AddrMode::Abs(addr) => {
+                        self.ram[*addr as usize] = result;
+                    }
+                    AddrMode::AbsX(addr) => {
+                        self.ram[*addr as usize + self.x as usize] = result;
+                    }
+                    _ => panic!("Illegal addressing mode for ASL!")
+                }
+            }
 
             // Branch on Carry Clear
             InstructionType::BCC => {
@@ -425,6 +552,7 @@ impl CPU {
                 self.set_sr_nz(result)
             }
 
+            // Decrement Memory by One
             InstructionType::DEC => {
                 let operand = self.get_operand(instruction);
                 let result = operand.overflowing_sub(1).0;
@@ -446,14 +574,23 @@ impl CPU {
                 }
             }
 
+            // Decrement Index X by One
             InstructionType::DEX => {
                 self.x = self.x.overflowing_sub(1).0;
                 self.set_sr_nz(self.x);
             }
 
+            // Decrement Index Y by One
             InstructionType::DEY => {
                 self.y = self.y.overflowing_sub(1).0;
                 self.set_sr_nz(self.y);
+            }
+
+            // Exclusive-OR Memory with Accumulator
+            InstructionType::EOR => {
+                let operand = self.get_operand(instruction);
+                self.a ^= operand;
+                self.set_sr_nz(self.a);
             }
 
             // Increment Memory by One
@@ -494,7 +631,11 @@ impl CPU {
             InstructionType::JMP => {
                 let jump_addr = match &instruction.addr_mode {
                     AddrMode::Abs(addr) => *addr,
-                    AddrMode::Ind(addr) => { panic!("Indirect jump addressing not implemented!") }
+                    AddrMode::Ind(addr) => {
+                        let low_byte = self.ram[*addr as usize];
+                        let high_byte = self.ram[*addr as usize + 1];
+                        (high_byte as u16) << 8 | (low_byte as u16)
+                    }
                     _ => panic!("Illegal addressing mode for JMP!")
                 };
                 self.pc = jump_addr;
