@@ -96,7 +96,7 @@ impl CPU {
             a: 0,
             x: 0,
             y: 0,
-            sp: 0u8,
+            sp: 0xfd,
             pc: 0u16,
             sr: init_sr,
         }
@@ -112,7 +112,7 @@ impl CPU {
         let instruction = Instruction::from(instruction_bytes)?;
 
         // Execute
-        println!("${:04x}: {}{}  // {}", self.pc, instruction, self, instruction.name.description);
+        println!("{:04X}  {}{}", self.pc, instruction, self);
         self.execute(&instruction);
         Ok(())
     }
@@ -156,12 +156,12 @@ impl CPU {
     // start writing to ram from offset
     pub fn load_ines(&mut self, filename: &str) -> Result<(), String> {
         // FIXME: currently hardcoded to load nestest.nes
-        println!("Loading memory from ines file: {}", filename);
+        // println!("Loading memory from ines file: {}", filename);
         let bytes = match fs::read(filename) {
             Ok(bytes) => Ok(bytes),
             Err(e) => Err(format!("{}", e)),
         }?;
-        println!();
+        // println!();
 
         // TODO: add error handling
 
@@ -837,8 +837,8 @@ impl CPU {
 }
 impl fmt::Display for CPU {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "A:${:02x} X:${:02x} Y:${:02x} SP:${:02x} SR:{:08b}",
-            self.a, self.x, self.y, self.sp, self.sr
+        write!(f, "A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+            self.a, self.x, self.y, self.sr, self.sp
         )
     }
 }

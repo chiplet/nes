@@ -5,11 +5,10 @@ use crate::cpu::CPU;
 fn main() {
     let mut cpu = CPU::init();
 
-    cpu.load_hexdump("./hexdumps/tmp.txt").unwrap();
-    cpu.pc = 0x0600;
-
+    cpu.load_ines("./hexdumps/tests/nestest.nes").unwrap();
+    cpu.pc = 0xc000;
     loop {
-        cpu.tick().unwrap();
+        cpu.tick();
     }
 
     // println!("ram[${:04x}] = ${:02x}", 0x200, cpu.ram[0x0200]);

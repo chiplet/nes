@@ -1545,29 +1545,29 @@ impl Instruction {
 }
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        const WIDTH_1: usize = 12;
-        const WIDTH_2: usize = 10;
+        const WIDTH_1: usize = 10;
+        const WIDTH_2: usize = 28;
 
         for byte in &self.machine_code {
-            write!(f, "{:02x} ", byte).unwrap();
+            write!(f, "{:02X} ", byte).unwrap();
         }
         let spacing = " ".repeat(WIDTH_1-self.machine_code.len()*3);
         write!(f, "{}{} ", spacing, self.name.mnemonic);
 
         match &self.addr_mode {
             AddrMode::A => write!(f, "A{}", " ".repeat(WIDTH_2-1)),
-            AddrMode::Abs(addr) => write!(f, "${:04x}{}", addr, " ".repeat(WIDTH_2-5)),
-            AddrMode::AbsX(addr) => write!(f, "${:04x},X{}", addr, " ".repeat(WIDTH_2-7)),
-            AddrMode::AbsY(addr) => write!(f, "${:04x},Y{}", addr, " ".repeat(WIDTH_2-7)),
-            AddrMode::Imm(value) => write!(f, "#${:02x}{}", value, " ".repeat(WIDTH_2-4)),
+            AddrMode::Abs(addr) => write!(f, "${:04X}{}", addr, " ".repeat(WIDTH_2-5)),
+            AddrMode::AbsX(addr) => write!(f, "${:04X},X{}", addr, " ".repeat(WIDTH_2-7)),
+            AddrMode::AbsY(addr) => write!(f, "${:04X},Y{}", addr, " ".repeat(WIDTH_2-7)),
+            AddrMode::Imm(value) => write!(f, "#${:02X}{}", value, " ".repeat(WIDTH_2-4)),
             AddrMode::Impl => write!(f, "{}", " ".repeat(WIDTH_2)),
-            AddrMode::Ind(addr) => write!(f, "${:04x}{}", addr, " ".repeat(WIDTH_2-5)),
-            AddrMode::XInd(addr) => write!(f, "(${:04x},X){}", addr, " ".repeat(WIDTH_2-9)),
-            AddrMode::IndY(addr) => write!(f, "(${:04x}),Y{}", addr, " ".repeat(WIDTH_2-9)),
-            AddrMode::Rel(value) => write!(f, "${:02x}{}", value, " ".repeat(WIDTH_2-3)),
-            AddrMode::Zpg(addr) => write!(f, "${:02x}{}", addr, " ".repeat(WIDTH_2-3)),
-            AddrMode::ZpgX(addr) => write!(f, "${:02x},X{}", addr, " ".repeat(WIDTH_2-5)),
-            AddrMode::ZpgY(addr) => write!(f, "${:02x},Y{}", addr, " ".repeat(WIDTH_2-5)),
+            AddrMode::Ind(addr) => write!(f, "${:04X}{}", addr, " ".repeat(WIDTH_2-5)),
+            AddrMode::XInd(addr) => write!(f, "(${:04X},X){}", addr, " ".repeat(WIDTH_2-9)),
+            AddrMode::IndY(addr) => write!(f, "(${:04X}),Y{}", addr, " ".repeat(WIDTH_2-9)),
+            AddrMode::Rel(value) => write!(f, "${:02X}{}", value, " ".repeat(WIDTH_2-3)),
+            AddrMode::Zpg(addr) => write!(f, "${:02X}{}", addr, " ".repeat(WIDTH_2-3)),
+            AddrMode::ZpgX(addr) => write!(f, "${:02X},X{}", addr, " ".repeat(WIDTH_2-5)),
+            AddrMode::ZpgY(addr) => write!(f, "${:02X},Y{}", addr, " ".repeat(WIDTH_2-5)),
         }
     }
 }
