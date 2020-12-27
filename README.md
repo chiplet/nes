@@ -38,3 +38,12 @@ A more optimized release build can be built by compiling with the `--release` fl
 $ cargo build --release
 $ cargo run --release
 ```
+
+## Testing
+
+All tests can be run with the command:
+```
+cargo test --all
+```
+
+Many tests load a test program into CPU memory from the `hexdumps/tests/` directory, execute the program, and verify that the CPU is in an expected state.
