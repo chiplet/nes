@@ -2,9 +2,12 @@ mod isa;
 mod test;
 use crate::cpu::isa::{Instruction, AddrMode, InstructionType};
 use crate::util;
+use crate::bus::Bus;
 use std::{
     fs,
     fmt,
+    rc::Rc,
+    cell::RefCell,
     num::Wrapping
 };
 
@@ -70,10 +73,9 @@ impl BitOps for u8 {
 
 
 /*** CPU structure ***/
-#[derive(Debug)]
-pub struct CPU {
-    // addressable memory space
-    pub ram: Vec<u8>,
+pub struct Cpu {
+    // give cpu access to system bus
+    bus: Rc<RefCell<Bus>>,
 
     // registers
     pub a: u8,
@@ -83,17 +85,14 @@ pub struct CPU {
     pub pc: u16,
     pub sr: u8,
 }
-impl CPU {
-    pub fn init() -> Self {
+impl Cpu {
+    pub fn init(bus: &Rc<RefCell<Bus>>) -> Self {
         // enable interrupt_disable bit on startup
         let mut init_sr = 0;
         init_sr.set_bit(INT_DISABLE_BIT);
 
-        CPU {
-            // zero out CPU memory
-            ram: vec![0; 65536],
-
-            // init CPU registers
+        Cpu {
+            bus: Rc::clone(&bus),
             a: 0,
             x: 0,
             y: 0,
@@ -103,14 +102,16 @@ impl CPU {
         }
     }
 
-    // forward emulation by one clock cycle
+    // forward emulation by one instruction
     pub fn tick(&mut self) -> Result<(), String> {
         // Fetch
         let next_index = self.pc as usize;
-        let instruction_bytes = &self.ram[next_index..next_index+3];
+        let bus = self.bus.borrow();
+        let instruction_bytes = bus.read_slice(next_index as u16, (next_index+3) as u16)?;
 
         // Decode
         let instruction = Instruction::from(instruction_bytes)?;
+        drop(bus);
 
         // Execute
         println!("{:04X}  {}{}", self.pc, instruction, self);
@@ -144,8 +145,8 @@ impl CPU {
                 .collect::<Vec<u8>>();
 
             // copy bytes to memory
-            for b in bytes.iter().enumerate() {
-                self.ram[addr as usize + b.0] = *b.1;
+            for (offset, &value) in bytes.iter().enumerate() {
+                self.bus.borrow_mut().write(addr + offset as u16, value);
             }
         }
         println!();
@@ -167,14 +168,14 @@ impl CPU {
         // TODO: add error handling
 
         for i in 0..0x4000 {
-            self.ram[0xc000 + i] = bytes[i + 0x10];
+            self.bus.borrow_mut().write(0xc000 + i as u16, bytes[i + 0x10]);
         }
 
         Ok(())
     }
 
     // execute single machine instruction
-    fn execute(&mut self, instruction: &Instruction) {
+    fn execute(&mut self, instruction: &Instruction) -> Result<(), String> {
         match instruction.ins_type {
 
             // Load Accumulator with Memory
@@ -209,16 +210,16 @@ impl CPU {
                         self.a = result;
                     }
                     AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr as u16, result);
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write((addr + self.x) as u16, result);
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr, result);
                     }
                     AddrMode::AbsX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write(*addr + self.x as u16, result);
                     }
                     _ => panic!("Illegal addressing mode for LSR!")
                 }
@@ -270,16 +271,16 @@ impl CPU {
                         self.a = result;
                     }
                     AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr as u16, result);
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write((addr + self.x) as u16, result);
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr, result);
                     }
                     AddrMode::AbsX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write(*addr + self.x as u16, result);
                     }
                     _ => panic!("Illegal addressing mode for ROL!")
                 }
@@ -300,16 +301,16 @@ impl CPU {
                         self.a = result;
                     }
                     AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr as u16, result);
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write((addr + self.x) as u16, result);
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr, result);
                     }
                     AddrMode::AbsX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write(*addr + self.x as u16, result);
                     }
                     _ => panic!("Illegal addressing mode for ROR!")
                 }
@@ -413,16 +414,16 @@ impl CPU {
                         self.a = result;
                     }
                     AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr as u16, result);
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write((addr + self.x) as u16, result);
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr, result);
                     }
                     AddrMode::AbsX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write(*addr + self.x as u16, result);
                     }
                     _ => panic!("Illegal addressing mode for ASL!")
                 }
@@ -489,10 +490,12 @@ impl CPU {
 
             // Force Break
             InstructionType::BRK => {
-                panic!("TODO: implement CPU interrupts");
+                /*
                 self.stack_push(self.pc+2);
                 self.stack_push_byte(self.sr);
                 self.sr.set_bit(INT_DISABLE_BIT);
+                */
+                panic!("TODO: implement Cpu interrupts");
             }
 
             // Branch on Overflow Clear
@@ -560,16 +563,16 @@ impl CPU {
                 self.set_sr_nz(result);
                 match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr as u16, result);
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write((addr + self.x) as u16, result);
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr, result);
                     }
                     AddrMode::AbsX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write(*addr + self.x as u16, result);
                     }
                     _ => panic!("Illegal addressing mode for DEC!")
                 }
@@ -601,16 +604,16 @@ impl CPU {
                 self.set_sr_nz(result);
                 match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr as u16, result);
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write((addr + self.x) as u16, result);
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = result;
+                        self.bus.borrow_mut().write(*addr, result);
                     }
                     AddrMode::AbsX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = result;
+                        self.bus.borrow_mut().write(*addr + self.x as u16, result);
                     }
                     _ => panic!("Illegal addressing mode for INC!")
                 }
@@ -633,8 +636,9 @@ impl CPU {
                 let jump_addr = match &instruction.addr_mode {
                     AddrMode::Abs(addr) => *addr,
                     AddrMode::Ind(addr) => {
-                        let low_byte = self.ram[*addr as usize];
-                        let high_byte = self.ram[*addr as usize + 1];
+                        let low_byte = self.bus.borrow().read(*addr)?;
+                        let high_byte = self.bus.borrow().read(*addr + 1)?;
+
                         (high_byte as u16) << 8 | (low_byte as u16)
                     }
                     _ => panic!("Illegal addressing mode for JMP!")
@@ -656,27 +660,36 @@ impl CPU {
             InstructionType::STA => {
                 match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = self.a;
+                        self.bus.borrow_mut().write(*addr as u16, self.a);
+//                        self.ram[*addr as usize] = self.a;
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = self.a;
+//                        self.ram[*addr as usize + self.x as usize] = self.a;
+                        self.bus.borrow_mut().write((*addr + self.x) as u16, self.a);
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = self.a;
+                        self.bus.borrow_mut().write(*addr, self.a);
+//                        self.ram[*addr as usize] = self.a;
                     }
                     AddrMode::AbsX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = self.a;
+//                        self.ram[*addr as usize + self.x as usize] = self.a;
+                        self.bus.borrow_mut().write(*addr + self.x as u16, self.a);
                     }
                     AddrMode::AbsY(addr) => {
-                        self.ram[*addr as usize + self.y as usize] = self.a;
+//                        self.ram[*addr as usize + self.y as usize] = self.a;
+                        self.bus.borrow_mut().write(*addr + self.y as u16, self.a);
                     }
                     AddrMode::XInd(addr) => {
-                        let indirect = self.ram[(*addr + self.x) as usize] as usize;
-                        self.ram[indirect] = self.a
+//                        let indirect = self.ram[(*addr + self.x) as usize] as usize;
+                        let indirect = self.bus.borrow().read((*addr + self.x) as u16)? as u16;
+//                        self.ram[indirect] = self.a
+                        self.bus.borrow_mut().write(indirect, self.a);
                     }
                     AddrMode::IndY(addr) => {
-                        let indirect = self.ram[*addr as usize] as usize;
-                        self.ram[indirect + self.y as usize] = self.a
+//                        let indirect = self.ram[*addr as usize] as usize;
+//                        self.ram[indirect + self.y as usize] = self.a
+                        let indirect = self.bus.borrow().read(*addr as u16)? as u16;
+                        self.bus.borrow_mut().write(indirect, self.a);
                     }
                     _ => panic!("Illegal addressing mode for STA!")
                 }
@@ -686,13 +699,16 @@ impl CPU {
             InstructionType::STX => {
                 match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = self.x;
+//                        self.ram[*addr as usize] = self.x;
+                        self.bus.borrow_mut().write(*addr as u16, self.x);
                     }
                     AddrMode::ZpgY(addr) => {
-                        self.ram[*addr as usize + self.y as usize] = self.x;
+//                        self.ram[*addr as usize + self.y as usize] = self.x;
+                        self.bus.borrow_mut().write((addr + self.y) as u16, self.x);
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = self.x;
+//                        self.ram[*addr as usize] = self.x;
+                        self.bus.borrow_mut().write(*addr, self.x);
                     }
                     _ => panic!("Illegal addressing mode for STX!")
                 }
@@ -702,13 +718,16 @@ impl CPU {
             InstructionType::STY => {
                 match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
-                        self.ram[*addr as usize] = self.y;
+//                        self.ram[*addr as usize] = self.y;
+                        self.bus.borrow_mut().write(*addr as u16, self.y);
                     }
                     AddrMode::ZpgX(addr) => {
-                        self.ram[*addr as usize + self.x as usize] = self.y;
+//                        self.ram[*addr as usize + self.x as usize] = self.y;
+                        self.bus.borrow_mut().write((addr + self.x) as u16, self.x);
                     }
                     AddrMode::Abs(addr) => {
-                        self.ram[*addr as usize] = self.y;
+//                        self.ram[*addr as usize] = self.y;
+                        self.bus.borrow_mut().write(*addr, self.y);
                     }
                     _ => panic!("Illegal addressing mode for STX!")
                 }
@@ -752,17 +771,20 @@ impl CPU {
 
         // addition is wrapping since some branch instructions rely on this behavior
         self.pc = self.pc.wrapping_add(instruction.machine_code.len() as u16);
+        Ok(())
     }
 
     // stack manipulation
     fn stack_push_byte(&mut self, byte: u8) {
-        self.ram[0x0100 as usize + self.sp as usize] = byte;
+//        self.ram[0x0100 as usize + self.sp as usize] = byte;
+        self.bus.borrow_mut().write(0x0100_u16 + self.sp as u16, byte).unwrap();
         self.sp = (Wrapping(self.sp) - Wrapping(1u8)).0;
     }
     // pop byte from stack
     fn stack_pop_byte(&mut self) -> u8 {
         self.sp = (Wrapping(self.sp) + Wrapping(1u8)).0;
-        self.ram[0x0100 as usize + self.sp as usize]
+//        self.ram[0x0100 as usize + self.sp as usize]
+        self.bus.borrow().read(0x0100_u16 + self.sp as u16).unwrap()
     }
     // push u16 to stack (high byte first)
     fn stack_push(&mut self, value: u16) {
@@ -786,13 +808,16 @@ impl CPU {
                 self.a
             }
             AddrMode::Abs(addr) => {
-                self.ram[*addr as usize]
+//                self.ram[*addr as usize]
+                self.bus.borrow().read(*addr).unwrap()
             }
             AddrMode::AbsX(addr) => {
-                self.ram[(*addr + self.x as u16) as usize]
+//                self.ram[(*addr + self.x as u16) as usize]
+                self.bus.borrow().read(*addr + self.x as u16).unwrap()
             }
             AddrMode::AbsY(addr) => {
-                self.ram[(*addr + self.y as u16) as usize]
+//                self.ram[(*addr + self.y as u16) as usize]
+                self.bus.borrow().read(*addr + self.y as u16).unwrap()
             }
             AddrMode::Imm(value) => {
                 *value
@@ -800,29 +825,34 @@ impl CPU {
             AddrMode::Impl => {
                 panic!("Calling get_operand() for implied addressing mode does not make sense.")
             }
-            AddrMode::Ind(addr) => {
-                let indirect = self.ram[*addr as usize] as usize;
-                self.ram[indirect]
+            AddrMode::Ind(_addr) => {
+                panic!("Calling get_operand() for indirect addressing mode does not make sense.")
             }
             AddrMode::XInd(addr) => {
-                let indirect = self.ram[(*addr + self.x) as usize] as usize;
-                self.ram[indirect]
+                let indirect_low = self.bus.borrow().read((*addr + self.x) as u16).unwrap();
+                let indirect_high = self.bus.borrow().read((*addr + self.x + 1) as u16).unwrap();
+                let indirect = (indirect_high as u16) << 8 | (indirect_low as u16);
+                self.bus.borrow().read(indirect).unwrap()
             }
             AddrMode::IndY(addr) => {
-                let indirect = self.ram[*addr as usize] as usize;
-                self.ram[indirect + self.y as usize]
+                let indirect_low = self.bus.borrow().read(*addr as u16).unwrap();
+                let indirect_high = self.bus.borrow().read(*addr as u16).unwrap() + 1;
+                let indirect = (indirect_high as u16) << 8 | (indirect_low as u16);
+                self.bus.borrow().read(indirect + self.y as u16).unwrap()
             }
             AddrMode::Rel(value) => {
                 *value as u8
             }
             AddrMode::Zpg(addr) => {
-                self.ram[*addr as usize]
+//                self.ram[*addr as usize]
+                self.bus.borrow().read(*addr as u16).unwrap()
             }
             AddrMode::ZpgX(addr) => {
-                self.ram[(*addr + self.x) as usize]
+//                self.ram[(*addr + self.x) as usize]
+                self.bus.borrow().read((*addr + self.x) as u16).unwrap()
             }
             AddrMode::ZpgY(addr) => {
-                self.ram[(*addr + self.y) as usize]
+                self.bus.borrow().read((*addr + self.y) as u16).unwrap()
             }
         }
     }
@@ -836,7 +866,7 @@ impl CPU {
         }
     }
 }
-impl fmt::Display for CPU {
+impl fmt::Display for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
             self.a, self.x, self.y, self.sr, self.sp
