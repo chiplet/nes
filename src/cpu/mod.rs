@@ -661,33 +661,24 @@ impl Cpu {
                 match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
                         self.bus.borrow_mut().write(*addr as u16, self.a);
-//                        self.ram[*addr as usize] = self.a;
                     }
                     AddrMode::ZpgX(addr) => {
-//                        self.ram[*addr as usize + self.x as usize] = self.a;
                         self.bus.borrow_mut().write((*addr + self.x) as u16, self.a);
                     }
                     AddrMode::Abs(addr) => {
                         self.bus.borrow_mut().write(*addr, self.a);
-//                        self.ram[*addr as usize] = self.a;
                     }
                     AddrMode::AbsX(addr) => {
-//                        self.ram[*addr as usize + self.x as usize] = self.a;
                         self.bus.borrow_mut().write(*addr + self.x as u16, self.a);
                     }
                     AddrMode::AbsY(addr) => {
-//                        self.ram[*addr as usize + self.y as usize] = self.a;
                         self.bus.borrow_mut().write(*addr + self.y as u16, self.a);
                     }
                     AddrMode::XInd(addr) => {
-//                        let indirect = self.ram[(*addr + self.x) as usize] as usize;
                         let indirect = self.bus.borrow().read((*addr + self.x) as u16)? as u16;
-//                        self.ram[indirect] = self.a
                         self.bus.borrow_mut().write(indirect, self.a);
                     }
                     AddrMode::IndY(addr) => {
-//                        let indirect = self.ram[*addr as usize] as usize;
-//                        self.ram[indirect + self.y as usize] = self.a
                         let indirect = self.bus.borrow().read(*addr as u16)? as u16;
                         self.bus.borrow_mut().write(indirect, self.a);
                     }
@@ -699,15 +690,12 @@ impl Cpu {
             InstructionType::STX => {
                 match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
-//                        self.ram[*addr as usize] = self.x;
                         self.bus.borrow_mut().write(*addr as u16, self.x);
                     }
                     AddrMode::ZpgY(addr) => {
-//                        self.ram[*addr as usize + self.y as usize] = self.x;
                         self.bus.borrow_mut().write((addr + self.y) as u16, self.x);
                     }
                     AddrMode::Abs(addr) => {
-//                        self.ram[*addr as usize] = self.x;
                         self.bus.borrow_mut().write(*addr, self.x);
                     }
                     _ => panic!("Illegal addressing mode for STX!")
@@ -718,15 +706,12 @@ impl Cpu {
             InstructionType::STY => {
                 match &instruction.addr_mode {
                     AddrMode::Zpg(addr) => {
-//                        self.ram[*addr as usize] = self.y;
                         self.bus.borrow_mut().write(*addr as u16, self.y);
                     }
                     AddrMode::ZpgX(addr) => {
-//                        self.ram[*addr as usize + self.x as usize] = self.y;
                         self.bus.borrow_mut().write((addr + self.x) as u16, self.x);
                     }
                     AddrMode::Abs(addr) => {
-//                        self.ram[*addr as usize] = self.y;
                         self.bus.borrow_mut().write(*addr, self.y);
                     }
                     _ => panic!("Illegal addressing mode for STX!")
@@ -808,15 +793,12 @@ impl Cpu {
                 self.a
             }
             AddrMode::Abs(addr) => {
-//                self.ram[*addr as usize]
                 self.bus.borrow().read(*addr).unwrap()
             }
             AddrMode::AbsX(addr) => {
-//                self.ram[(*addr + self.x as u16) as usize]
                 self.bus.borrow().read(*addr + self.x as u16).unwrap()
             }
             AddrMode::AbsY(addr) => {
-//                self.ram[(*addr + self.y as u16) as usize]
                 self.bus.borrow().read(*addr + self.y as u16).unwrap()
             }
             AddrMode::Imm(value) => {
@@ -844,11 +826,9 @@ impl Cpu {
                 *value as u8
             }
             AddrMode::Zpg(addr) => {
-//                self.ram[*addr as usize]
                 self.bus.borrow().read(*addr as u16).unwrap()
             }
             AddrMode::ZpgX(addr) => {
-//                self.ram[(*addr + self.x) as usize]
                 self.bus.borrow().read((*addr + self.x) as u16).unwrap()
             }
             AddrMode::ZpgY(addr) => {
