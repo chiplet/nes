@@ -52,7 +52,7 @@ impl Bus {
         Ok((*device).read_from_bus(addr))
     }
 
-    /// Read a single byte from bus address `addr`
+    /// Write a single byte to bus address `addr`
     fn write(&mut self, addr: u16, data: u8) -> Result<(), String> {
         let mut device = self.get_mut_mapped_device(addr)?;
         device.write_from_bus(addr, data);
@@ -60,14 +60,14 @@ impl Bus {
     }
 }
 
-/// A device connected to the system bus
+/// A device connected to the system bus `Bus`
 pub trait BusDevice {
-    /// Write a single byte `data` to bus address `addr`
-    /// Bus calls this function when it wants to write to a particular device
+    /// Read a single byte from bus address `addr`
+    /// `Bus` calls this function when it wants to read from a particular device
     fn read_from_bus(&self, addr: u16) -> u8;
 
     /// Write a single byte `data` to bus address `addr`
-    /// Bus calls this function when it wants to write to a particular device
+    /// `Bus` calls this function when it wants to write to a particular device
     fn write_from_bus(&mut self, addr: u16, data: u8);
 
     /// Get address range associated with the device
@@ -75,7 +75,6 @@ pub trait BusDevice {
 }
 
 /// Bus address range (inclusive) assigned to a device.
-#[derive(Debug)]
 pub struct AddrRange {
     pub start: u16,
     pub end: u16,
@@ -120,7 +119,6 @@ impl RamDevice {
         for (i, num) in self.memory.iter_mut().enumerate() {
             *num = (i % 256) as u8;
         }
-        println!("{:?}", self.memory);
     }
 }
 impl BusDevice for RamDevice {
@@ -205,16 +203,77 @@ mod test {
     }
 
     #[test]
-    #[should_panic]
-    fn disallow_overlapping_memory_regions() {
+    // legal memory mapping where ram1 < ram2
+    fn disallow_overlapping_memory_regions_1() {
         let mut bus = Rc::new(RefCell::new(Bus::new()));
-
-        // init devices
         let mut ram1 = RamDevice::new(&bus, 0x0000, 0x0200);
-        let mut ram2 = RamDevice::new(&bus, 0x0100, 0x0200);
+        let mut ram2 = RamDevice::new(&bus, 0x0200, 0x0200);
+        bus.borrow_mut().add(ram1).unwrap();
+        bus.borrow_mut().add(ram2).unwrap();
+    }
 
-        // add devices to bus
+    #[test]
+    #[should_panic]
+    // illegal memory mapping where ram1 <= ram2
+    fn disallow_overlapping_memory_regions_2() {
+        let mut bus = Rc::new(RefCell::new(Bus::new()));
+        let mut ram1 = RamDevice::new(&bus, 0x0000, 0x0201);
+        let mut ram2 = RamDevice::new(&bus, 0x0200, 0x0200);
         bus.borrow_mut().add(ram1).unwrap();
         bus.borrow_mut().add(ram2).unwrap();    // should panic
+    }
+
+    #[test]
+    #[should_panic]
+    // illegal memory mapping where ram1 <= ram2
+    fn disallow_overlapping_memory_regions_3() {
+        let mut bus = Rc::new(RefCell::new(Bus::new()));
+        let mut ram1 = RamDevice::new(&bus, 0x0000, 0x0300);
+        let mut ram2 = RamDevice::new(&bus, 0x0200, 0x0200);
+        bus.borrow_mut().add(ram1).unwrap();
+        bus.borrow_mut().add(ram2).unwrap();    // should panic
+    }
+
+    #[test]
+    #[should_panic]
+    // illegal memory mapping where ram2 is enclosed in ram1
+    fn disallow_overlapping_memory_regions_4() {
+        let mut bus = Rc::new(RefCell::new(Bus::new()));
+        let mut ram1 = RamDevice::new(&bus, 0x0200, 0x0200);
+        let mut ram2 = RamDevice::new(&bus, 0x0300, 0x0080);
+        bus.borrow_mut().add(ram1).unwrap();
+        bus.borrow_mut().add(ram2).unwrap();    // should panic
+    }
+
+    #[test]
+    #[should_panic]
+    // illegal memory mapping where ram1 >= ram2
+    fn disallow_overlapping_memory_regions_5() {
+        let mut bus = Rc::new(RefCell::new(Bus::new()));
+        let mut ram1 = RamDevice::new(&bus, 0x0300, 0x0200);
+        let mut ram2 = RamDevice::new(&bus, 0x0200, 0x0200);
+        bus.borrow_mut().add(ram1).unwrap();
+        bus.borrow_mut().add(ram2).unwrap();    // should panic
+    }
+
+    #[test]
+    #[should_panic]
+    // illegal memory mapping where ram1 >= ram2
+    fn disallow_overlapping_memory_regions_6() {
+        let mut bus = Rc::new(RefCell::new(Bus::new()));
+        let mut ram1 = RamDevice::new(&bus, 0x0400, 0x0200);
+        let mut ram2 = RamDevice::new(&bus, 0x0200, 0x0201);
+        bus.borrow_mut().add(ram1).unwrap();
+        bus.borrow_mut().add(ram2).unwrap();    // should panic
+    }
+
+    #[test]
+    // legal memory mapping where ram1 > ram2
+    fn disallow_overlapping_memory_regions_7() {
+        let mut bus = Rc::new(RefCell::new(Bus::new()));
+        let mut ram1 = RamDevice::new(&bus, 0x0400, 0x0200);
+        let mut ram2 = RamDevice::new(&bus, 0x0200, 0x0200);
+        bus.borrow_mut().add(ram1).unwrap();
+        bus.borrow_mut().add(ram2).unwrap();
     }
 }
